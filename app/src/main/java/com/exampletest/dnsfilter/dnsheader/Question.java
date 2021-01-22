@@ -39,6 +39,6 @@ public class Question {
 
     @Override
     public String toString() {
-        return Domain;
+        return ("Domain [" +Domain + "], Type " + Type+ ", Class " + Class );
     }
 }

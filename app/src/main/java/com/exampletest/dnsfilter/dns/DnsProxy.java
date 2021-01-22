@@ -204,9 +204,10 @@ public class DnsProxy implements Runnable {
         }
     }
 
-    private boolean interceptDns(IPHeader ipHeader, UDPHeader udpHeader, DnsPacket dnsPacket) {
+    private boolean reallyNeedToInterceptThisDns(IPHeader ipHeader, UDPHeader udpHeader, DnsPacket dnsPacket) {
         Question question = dnsPacket.Questions[0];
        Log.d(" TODEL ","DNS Query intercepted> " + Arrays.toString(dnsPacket.Questions));
+        Log.d(" TODEL ","DNS Query data> " + question.toString());
         if (question.Type == 1) {
 
 //            int fakeIP = getOrCreateFakeIP(question.Domain);
@@ -242,8 +243,10 @@ public class DnsProxy implements Runnable {
     }
 
     public void onDnsRequestReceived(IPHeader ipHeader, UDPHeader udpHeader, DnsPacket dnsPacket) {
-        if (!interceptDns(ipHeader, udpHeader, dnsPacket)) {
-            //转发DNS
+        Log.d("TODEL", "onDnsRequestReceived() called with: ipHeader = [" + ipHeader + "], udpHeader = [" + udpHeader + "], dnsPacket = [" + dnsPacket + "]");
+        if (!reallyNeedToInterceptThisDns(ipHeader, udpHeader, dnsPacket)) {
+            
+            //Simply Forward  DNS
             QueryState state = new QueryState();
             state.ClientQueryID = dnsPacket.Header.ID;
             state.QueryNanoTime = System.nanoTime();
@@ -252,13 +255,13 @@ public class DnsProxy implements Runnable {
             state.RemoteIP = ipHeader.getDestinationIP();
             state.RemotePort = udpHeader.getDestinationPort();
 
-            // 转换QueryID
-            mQueryID++;// 增加ID
+            // Conversion QueryID
+            mQueryID++;// increase ID
             dnsPacket.Header.setID(mQueryID);
 
             synchronized (mQueryArray) {
-                clearExpiredQueries();//清空过期的查询，减少内存开销。
-                mQueryArray.put(mQueryID, state);// 关联数据
+                clearExpiredQueries();//Clear outdated queries to reduce memory overhead.
+                mQueryArray.put(mQueryID, state);// Linked data
             }
 
             InetSocketAddress remoteAddress = new InetSocketAddress(ProxyUtils.ipIntToInet4Address(state.RemoteIP), state.RemotePort);

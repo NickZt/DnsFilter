@@ -9,6 +9,7 @@ import android.util.Log;
 
 
 import com.exampletest.dnsfilter.MainActivity;
+import com.exampletest.dnsfilter.R;
 import com.exampletest.dnsfilter.dnsheader.DnsPacket;
 import com.exampletest.dnsfilter.tcpip.IPHeader;
 import com.exampletest.dnsfilter.tcpip.TCPHeader;
@@ -266,7 +267,7 @@ public class LocalVpnService extends VpnService implements Runnable {
                             }
                         }
 
-                        // 转发给本地TCP服务器
+                        // Forward  给本地TCP服务器
                         ipHeader.setSourceIP(ipHeader.getDestinationIP());
                         ipHeader.setDestinationIP(LOCAL_IP);
                         tcpHeader.setDestinationPort(mTCPProxyServer.Port);
@@ -304,31 +305,12 @@ public class LocalVpnService extends VpnService implements Runnable {
         LOCAL_IP = ProxyUtils.ipStringToInt("10.0.2.15");
 
         builder.addAddress("10.0.2.15", 24);
-//        if (IS_DEBUG)
-//            System.out.printf("addAddress: %s/%d\n", ipAddress.Address, ipAddress.PrefixLength);
-//
-//        for (ProxyConfigLoader.IPAddress dns : ProxyConfigLoader.getsInstance().getDnsServers()) {
-        builder.addDnsServer("8.8.8.8");
-//            if (IS_DEBUG)
-//                System.out.printf("addDnsServer: %s\n", dns.Address);
-//        }
 
-//        if (ProxyConfigLoader.getsInstance().getRouteList().size() > 0) {
-//            for (ProxyConfigLoader.IPAddress routeAddress : ProxyConfigLoader.getsInstance().getRouteList()) {
-//                builder.addRoute(routeAddress.Address, routeAddress.PrefixLength);
-//                if (IS_DEBUG)
-//                    System.out.printf("addRoute: %s/%d\n", routeAddress.Address, routeAddress.PrefixLength);
-//            }
-//            builder.addRoute(ProxyUtils.fakeNetWorkIP(), 16);
-//
-//            if (IS_DEBUG)
-//                System.out.printf("addRoute for FAKE_NETWORK: %s/%d\n", ProxyUtils.fakeNetWorkIP(), 16);
-//        } else {
+        builder.addDnsServer("8.8.8.8");
+
         builder.addRoute("8.8.8.8", 32);
         if (IS_DEBUG)
-            System.out.printf("addDefaultRoute: 0.0.0.0/0\n");
-//        }
-
+            System.out.printf("addDefaultRoute: 8.8.8.8/0\n");
 
         Class<?> SystemProperties = Class.forName("android.os.SystemProperties");
         Method method = SystemProperties.getMethod("get", new Class[]{String.class});
@@ -346,12 +328,7 @@ public class LocalVpnService extends VpnService implements Runnable {
         Intent intent = new Intent(this, MainActivity.class);
         PendingIntent pendingIntent = PendingIntent.getActivity(this, REQUEST_CODE, intent, 0);
         builder.setConfigureIntent(pendingIntent);
-//        builder.setSession(ProxyConfigLoader.getsInstance().getSessionName());
-
         ParcelFileDescriptor pfdDescriptor = builder.establish();
-
-
-//        onStatusChanged(ProxyConfigLoader.getsInstance().getSessionName() + getString(R.string.vpn_connected_status), true);
         onConnectionChanged(true);
         return pfdDescriptor;
     }
@@ -365,7 +342,7 @@ public class LocalVpnService extends VpnService implements Runnable {
         } catch (Exception e) {
             // ignore
         }
-//        onStatusChanged(ProxyConfigLoader.getsInstance().getSessionName() + getString(R.string.vpn_disconnected_status), false);
+        onStatusChanged( getString(R.string.vpn_disconnected_status), false);
         onConnectionChanged(false);
         this.mVPNOutputStream = null;
     }
@@ -386,17 +363,17 @@ public class LocalVpnService extends VpnService implements Runnable {
 //        }
 //    }
     private synchronized void dispose() {
-        // 断开VPN
+        // disconnect VPN
         disconnectVPN();
 
-        // 停止TcpServer
+        // stop TcpServer
         if (mTCPProxyServer != null) {
             mTCPProxyServer.stop();
             mTCPProxyServer = null;
             writeLog("LocalTcpServer stopped.");
         }
 
-        // 停止DNS解析器
+        // stop DNS解析器
         if (mDnsProxy != null) {
             mDnsProxy.stop();
             mDnsProxy = null;

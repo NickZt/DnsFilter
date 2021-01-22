@@ -1,4 +1,4 @@
-package com.exampletest.dnsfilter.dns;
+package com.exampletest.dnsfilter.tunnel;
 
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;

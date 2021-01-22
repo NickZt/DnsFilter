@@ -1,6 +1,10 @@
 package com.exampletest.dnsfilter.utils;
 
 
+import android.content.Context;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
+
 import com.exampletest.dnsfilter.tcpip.IPHeader;
 import com.exampletest.dnsfilter.tcpip.TCPHeader;
 import com.exampletest.dnsfilter.tcpip.UDPHeader;
@@ -12,6 +16,24 @@ import java.net.UnknownHostException;
 public class ProxyUtils {
 
     public static final boolean IS_DEBUG = true;
+
+    public static boolean checkNet(Context context) {
+        try {
+            ConnectivityManager connectivity = (ConnectivityManager) context
+                    .getSystemService(Context.CONNECTIVITY_SERVICE);
+            if (connectivity != null) {
+                NetworkInfo info = connectivity.getActiveNetworkInfo();
+                if (info != null && info.isConnected()) {
+                    if (info.getState() == NetworkInfo.State.CONNECTED) {
+                        return true;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            return false;
+        }
+        return false;
+    }
 
     public static InetAddress ipIntToInet4Address(int ip) {
         byte[] ipAddress = new byte[4];
@@ -67,7 +89,7 @@ public class ProxyUtils {
         data[offset + 1] = (byte) (value);
     }
 
-    // 网络字节顺序与主机字节顺序的转换
+    // 网络字节顺序与主机字节顺序的Conversion
 
     public static short htons(short u) {
         int r = ((u & 0xFFFF) << 8) | ((u & 0xFFFF) >> 8);

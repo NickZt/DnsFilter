@@ -3,6 +3,9 @@ package com.exampletest.dnsfilter.dns;
 
 import android.util.Log;
 
+import com.exampletest.dnsfilter.tunnel.Tunnel;
+import com.exampletest.dnsfilter.tunnel.TunnelFactory;
+
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.channels.SelectionKey;
@@ -95,9 +98,6 @@ public class TcpProxyServer implements Runnable {
         short portKey = (short) localChannel.socket().getPort();
         NatSession session = NatSessionManager.getSession(portKey);
         if (session != null) {
-//            if (ProxyConfigLoader.getsInstance().needProxy(session.RemoteHost, session.RemoteIP)) {
-//                if (IS_DEBUG)
-//                    System.out.printf("%d/%d:[PROXY] %s=>%s:%d\n", NatSessionManager.getSessionCount(), Tunnel.SessionCount, session.RemoteHost, ProxyUtils.ipIntToString(session.RemoteIP), session.RemotePort & 0xFFFF);
 //                return InetSocketAddress.createUnresolved(session.RemoteHost, session.RemotePort & 0xFFFF);
 //            } else {
                 return new InetSocketAddress(localChannel.socket().getInetAddress(), session.RemotePort & 0xFFFF);
@@ -115,9 +115,9 @@ public class TcpProxyServer implements Runnable {
             InetSocketAddress destAddress = getDestAddress(localChannel);
             if (destAddress != null) {
                 Tunnel remoteTunnel = TunnelFactory.createTunnelByConfig(destAddress, mSelector);
-                remoteTunnel.setBrotherTunnel(localTunnel);//关联兄弟
-                localTunnel.setBrotherTunnel(remoteTunnel);//关联兄弟
-                remoteTunnel.connect(destAddress);//开始连接
+                remoteTunnel.setBrotherTunnel(localTunnel);//Associated brothers
+                localTunnel.setBrotherTunnel(remoteTunnel);//Associated brothers
+                remoteTunnel.connect(destAddress);//Start connecting
             } else {
                 LocalVpnService.getInstance().writeLog("Error: socket(%s:%d) target host is null.", localChannel.socket().getInetAddress().toString(), localChannel.socket().getPort());
                 localTunnel.dispose();

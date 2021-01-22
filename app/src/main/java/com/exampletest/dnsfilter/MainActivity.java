@@ -124,6 +124,7 @@ public class MainActivity extends AppCompatActivity implements LocalVpnService.o
             return new String[0];
         }
     }
+
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
                                            @NonNull int[] grantResults) {
@@ -135,6 +136,7 @@ public class MainActivity extends AppCompatActivity implements LocalVpnService.o
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
 
     }
+
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         Log.d(TAG, "onActivityResult() called with: requestCode = [" + requestCode + "], resultCode = [" + resultCode + "], data = [" + data + "]");
@@ -185,7 +187,7 @@ public class MainActivity extends AppCompatActivity implements LocalVpnService.o
 
     @Override
     public void onLogReceived(String logString) {
-        Log.i(TAG+"-VPNLog", logString);
+        Log.i(TAG + "-VPNLog", logString);
     }
 
     @Override

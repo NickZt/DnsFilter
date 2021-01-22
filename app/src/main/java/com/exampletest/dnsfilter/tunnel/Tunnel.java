@@ -1,7 +1,9 @@
-package com.exampletest.dnsfilter.dns;
+package com.exampletest.dnsfilter.tunnel;
 
 import android.annotation.SuppressLint;
 
+
+import com.exampletest.dnsfilter.dns.LocalVpnService;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -56,10 +58,10 @@ public abstract class Tunnel {
     }
 
     public void connect(InetSocketAddress destAddress) throws Exception {
-        if (LocalVpnService.getInstance().protect(m_InnerChannel.socket())) {//保护socket不走vpn
+        if (LocalVpnService.getInstance().protect(m_InnerChannel.socket())) {//protection socket Don't go vpn
             m_DestAddress = destAddress;
-            m_InnerChannel.register(m_Selector, SelectionKey.OP_CONNECT, this);//注册连接事件
-            m_InnerChannel.connect(m_ServerEP);//连接目标
+            m_InnerChannel.register(m_Selector, SelectionKey.OP_CONNECT, this);//Register connection event
+            m_InnerChannel.connect(m_ServerEP);// Connection target
         } else {
             throw new Exception("VPN protect socket failed.");
         }
@@ -69,7 +71,7 @@ public abstract class Tunnel {
         if (m_InnerChannel.isBlocking()) {
             m_InnerChannel.configureBlocking(false);
         }
-        m_InnerChannel.register(m_Selector, SelectionKey.OP_READ, this);//注册读事件
+        m_InnerChannel.register(m_Selector, SelectionKey.OP_READ, this);//Register read event
     }
 
 
@@ -78,38 +80,38 @@ public abstract class Tunnel {
         while (buffer.hasRemaining()) {
             bytesSent = m_InnerChannel.write(buffer);
             if (bytesSent == 0) {
-                break;//不能再发送了，终止循环
+                break;//Can't send anymore, terminate the loop
             }
         }
 
-        if (buffer.hasRemaining()) {//数据没有发送完毕
-            if (copyRemainData) {//拷贝剩余数据，然后侦听写入事件，待可写入时写入。
-                //拷贝剩余数据
+        if (buffer.hasRemaining()) {//The data has not been sent
+            if (copyRemainData) {//Copy the remaining data, then listen to the write event, and write when it becomes available.
+                //Copy remaining data
                 if (m_SendRemainBuffer == null) {
                     m_SendRemainBuffer = ByteBuffer.allocate(buffer.capacity());
                 }
                 m_SendRemainBuffer.clear();
                 m_SendRemainBuffer.put(buffer);
                 m_SendRemainBuffer.flip();
-                m_InnerChannel.register(m_Selector, SelectionKey.OP_WRITE, this);//注册写事件
+                m_InnerChannel.register(m_Selector, SelectionKey.OP_WRITE, this);//Register write event
             }
             return false;
-        } else {//发送完毕了
+        } else {//Sent
             return true;
         }
     }
 
     protected void onTunnelEstablished() throws Exception {
-        this.beginReceive();//开始接收数据
-        m_BrotherTunnel.beginReceive();//兄弟也开始收数据吧
+        this.beginReceive();//Start receiving data
+        m_BrotherTunnel.beginReceive();//Brothers should start collecting data too
     }
 
     @SuppressLint("DefaultLocale")
     public void onConnectable() {
         try {
-            if (m_InnerChannel.finishConnect()) {//连接成功
-                onConnected(GL_BUFFER);//通知子类TCP已连接，子类可以根据协议实现握手等。
-            } else {//连接失败
+            if (m_InnerChannel.finishConnect()) {//connection succeeded
+                onConnected(GL_BUFFER);//Notify the subclass that TCP is connected, and the subclass can implement handshake etc. according to the protocol.
+            } else {//Connection failed
                 LocalVpnService.getInstance().writeLog("Error: connect to %s failed.", m_ServerEP);
                 this.dispose();
             }
@@ -126,17 +128,17 @@ public abstract class Tunnel {
             int bytesRead = m_InnerChannel.read(buffer);
             if (bytesRead > 0) {
                 buffer.flip();
-                afterReceived(buffer);//先让子类处理，例如解密数据。
-                if (isTunnelEstablished() && buffer.hasRemaining()) {//将读到的数据，转发给兄弟。
-                    m_BrotherTunnel.beforeSend(buffer);//发送之前，先让子类处理，例如做加密等。
+                afterReceived(buffer);//Let the subclass handle it first, such as decrypting data.
+                if (isTunnelEstablished() && buffer.hasRemaining()) {//Forward the read data to the brother.
+                    m_BrotherTunnel.beforeSend(buffer);//Before sending, let the subclass handle it, such as encryption.
                     if (!m_BrotherTunnel.write(buffer, true)) {
-                        key.cancel();//兄弟吃不消，就取消读取事件。
+                        key.cancel();//Brothers can't bear it, so cancel the read event.
                         if (IS_DEBUG)
                             System.out.printf("%s can not read more.\n", m_ServerEP);
                     }
                 }
             } else if (bytesRead < 0) {
-                this.dispose();//连接已关闭，释放资源。
+                this.dispose();//The connection is closed and resources are released.
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -146,13 +148,13 @@ public abstract class Tunnel {
 
     public void onWritable(SelectionKey key) {
         try {
-            this.beforeSend(m_SendRemainBuffer);//发送之前，先让子类处理，例如做加密等。
-            if (this.write(m_SendRemainBuffer, false)) {//如果剩余数据已经发送完毕
-                key.cancel();//取消写事件。
+            this.beforeSend(m_SendRemainBuffer);//Before sending, let the subclass handle it, such as encryption.
+            if (this.write(m_SendRemainBuffer, false)) {//If the remaining data has been sent
+                key.cancel();//Cancel the write event.
                 if (isTunnelEstablished()) {
-                    m_BrotherTunnel.beginReceive();//这边数据发送完毕，通知兄弟可以收数据了。
+                    m_BrotherTunnel.beginReceive();//After the data is sent here, inform the brothers that the data can be received.
                 } else {
-                    this.beginReceive();//开始接收代理服务器响应数据
+                    this.beginReceive();//Start receiving proxy server response data
                 }
             }
         } catch (Exception e) {
@@ -174,7 +176,7 @@ public abstract class Tunnel {
             }
 
             if (m_BrotherTunnel != null && disposeBrother) {
-                m_BrotherTunnel.disposeInternal(false);//把兄弟的资源也释放了。
+                m_BrotherTunnel.disposeInternal(false);//The resources of the brothers are also released.
             }
 
             m_InnerChannel = null;
