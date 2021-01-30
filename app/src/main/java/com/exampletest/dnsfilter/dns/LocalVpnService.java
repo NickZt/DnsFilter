@@ -20,16 +20,31 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.lang.reflect.Method;
+import java.net.DatagramPacket;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import okhttp3.HttpUrl;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+import okhttp3.dnsoverhttps.DnsOverHttps;
+import okhttp3.dnsoverhttps.DnsRecordCodec;
+import okhttp3.logging.HttpLoggingInterceptor;
+import okio.ByteString;
+
 import static com.exampletest.dnsfilter.MainActivity.REQUEST_CODE;
 import static com.exampletest.dnsfilter.utils.ProxyUtils.IS_DEBUG;
 
 public class LocalVpnService extends VpnService implements Runnable {
-
+    //    curl -i https://dns.google/dns-query?dns=AAABAAABAAAAAAAAB2V4YW1wbGUDY29tAAABAAE
+//    https://dns.google/resolve?name=
+    //            curl -i 'https://dns.google/resolve?name=example.com&type=a&do=1'
+    public static final String URL_DNS_GET = "https://dns.google/dns-query?dns=";
     private String mDOHUrl;
 
     public static LocalVpnService getInstance() {
@@ -50,7 +65,8 @@ public class LocalVpnService extends VpnService implements Runnable {
 
     private static int ID;
     private static int LOCAL_IP;
-    private static ConcurrentHashMap<onStatusChangedListener, Object> sOnStatusChangedListeners = new ConcurrentHashMap<onStatusChangedListener, Object>();
+    private static ConcurrentHashMap<onStatusChangedListener, Object> sOnStatusChangedListeners =
+            new ConcurrentHashMap<onStatusChangedListener, Object>();
 
     private Thread mVPNThread;
     private ParcelFileDescriptor mVPNInterface;
@@ -87,9 +103,13 @@ public class LocalVpnService extends VpnService implements Runnable {
 
     }
 
+
     @Override
     public void onCreate() {
         System.out.printf("VPNService(%s) created.\n", ID);
+
+
+
         super.onCreate();
     }
 
@@ -228,7 +248,8 @@ public class LocalVpnService extends VpnService implements Runnable {
                 TCPHeader tcpHeader = mTCPHeader;
                 tcpHeader.m_Offset = ipHeader.getHeaderLength();
                 if (ipHeader.getSourceIP() == LOCAL_IP) {
-                    if (tcpHeader.getSourcePort() == mTCPProxyServer.Port) {// Получать данные локального TCP-сервера
+                    if (tcpHeader.getSourcePort() == mTCPProxyServer.Port) {// Получать данные локального
+                        // TCP-сервера
                         NatSession session = NatSessionManager.getSession(tcpHeader.getDestinationPort());
                         if (session != null) {
                             ipHeader.setSourceIP(ipHeader.getDestinationIP());
@@ -247,7 +268,8 @@ public class LocalVpnService extends VpnService implements Runnable {
                         int portKey = tcpHeader.getSourcePort();
                         NatSession session = NatSessionManager.getSession(portKey);
                         if (session == null || session.RemoteIP != ipHeader.getDestinationIP() || session.RemotePort != tcpHeader.getDestinationPort()) {
-                            session = NatSessionManager.createSession(portKey, ipHeader.getDestinationIP(), tcpHeader.getDestinationPort());
+                            session = NatSessionManager.createSession(portKey, ipHeader.getDestinationIP(),
+                                    tcpHeader.getDestinationPort());
                         }
 
                         session.LastNanoTime = System.nanoTime();
@@ -255,19 +277,22 @@ public class LocalVpnService extends VpnService implements Runnable {
 
                         int tcpDataSize = ipHeader.getDataLength() - tcpHeader.getHeaderLength();
                         if (session.PacketSent == 2 && tcpDataSize == 0) {
-                            return;//Второй пакет ACK подтверждения TCP отбрасывается. Поскольку клиент также передает ACK при отправке данных, он может проанализировать информацию HOST до того, как сервер примет.
+                            return;//Второй пакет ACK подтверждения TCP отбрасывается. Поскольку клиент также
+                            // передает ACK при отправке данных, он может проанализировать информацию HOST до
+                            // того, как сервер примет.
                         }
 
-                        //分析数据，找到host
+                        //Analyze the data and find host
                         if (session.BytesSent == 0 && tcpDataSize > 10) {
                             int dataOffset = tcpHeader.m_Offset + tcpHeader.getHeaderLength();
-                            String host = HttpHostHeaderParser.parseHost(tcpHeader.m_Data, dataOffset, tcpDataSize);
+                            String host = HttpHostHeaderParser.parseHost(tcpHeader.m_Data, dataOffset,
+                                    tcpDataSize);
                             if (host != null) {
                                 session.RemoteHost = host;
                             }
                         }
 
-                        // Forward  给本地TCP服务器
+                        // Forward  To local TCP server
                         ipHeader.setSourceIP(ipHeader.getDestinationIP());
                         ipHeader.setDestinationIP(LOCAL_IP);
                         tcpHeader.setDestinationPort(mTCPProxyServer.Port);
@@ -300,17 +325,19 @@ public class LocalVpnService extends VpnService implements Runnable {
         Builder builder = new Builder();
 
         builder.setMtu(3000);
-        if (IS_DEBUG)
+        if (IS_DEBUG) {
             System.out.printf("setMtu: %d\n", 3000);
+        }
         LOCAL_IP = ProxyUtils.ipStringToInt("10.0.2.15");
 
-        builder.addAddress("10.0.2.15", 24);
+        builder.addAddress("10.0.0.2", 24);  // Only IPv4 support for now
 
         builder.addDnsServer("8.8.8.8");
 
-        builder.addRoute("8.8.8.8", 32);
-        if (IS_DEBUG)
+        builder.addRoute("0.0.0.0", 32);
+        if (IS_DEBUG) {
             System.out.printf("addDefaultRoute: 8.8.8.8/0\n");
+        }
 
         Class<?> SystemProperties = Class.forName("android.os.SystemProperties");
         Method method = SystemProperties.getMethod("get", new Class[]{String.class});
@@ -320,8 +347,9 @@ public class LocalVpnService extends VpnService implements Runnable {
             if (value != null && !"".equals(value) && !servers.contains(value)) {
                 servers.add(value);
                 builder.addRoute(value, 32);
-                if (IS_DEBUG)
+                if (IS_DEBUG) {
                     System.out.printf("%s=%s\n", name, value);
+                }
             }
         }
 
@@ -342,13 +370,13 @@ public class LocalVpnService extends VpnService implements Runnable {
         } catch (Exception e) {
             // ignore
         }
-        onStatusChanged( getString(R.string.vpn_disconnected_status), false);
+        onStatusChanged(getString(R.string.vpn_disconnected_status), false);
         onConnectionChanged(false);
         this.mVPNOutputStream = null;
     }
-    // proxyUrl
-//    private String[] downloadDOHConfig(String url) throws Exception {
-//        try {
+
+
+    //        try {
 //            OkHttpClient okHttpClient = new OkHttpClient();
 //            Request request = new Request.Builder().url(url).get().build();
 //            Call call = okHttpClient.newCall(request);

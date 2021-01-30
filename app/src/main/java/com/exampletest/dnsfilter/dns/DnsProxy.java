@@ -15,11 +15,22 @@ import com.exampletest.dnsfilter.utils.ProxyUtils;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.concurrent.ConcurrentHashMap;
 
+import okhttp3.ConnectionSpec;
+import okhttp3.HttpUrl;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+import okhttp3.dnsoverhttps.DnsOverHttps;
+import okhttp3.logging.HttpLoggingInterceptor;
+
+import static com.exampletest.dnsfilter.dns.LocalVpnService.URL_DNS_GET;
 import static com.exampletest.dnsfilter.utils.ProxyUtils.IS_DEBUG;
 
 
@@ -35,8 +46,10 @@ public class DnsProxy implements Runnable {
     }
 
     public boolean Stopped;
-    private static final ConcurrentHashMap<Integer, String> IPDomainMaps = new ConcurrentHashMap<Integer, String>();
-    private static final ConcurrentHashMap<String, Integer> DomainIPMaps = new ConcurrentHashMap<String, Integer>();
+    private static final ConcurrentHashMap<Integer, String> IPDomainMaps = new ConcurrentHashMap<Integer,
+            String>();
+    private static final ConcurrentHashMap<String, Integer> DomainIPMaps = new ConcurrentHashMap<String,
+            Integer>();
     private DatagramSocket mClient;
     private short mQueryID;
     private final SparseArray<QueryState> mQueryArray;
@@ -77,6 +90,33 @@ public class DnsProxy implements Runnable {
             dnsBuffer = dnsBuffer.slice();
 
             DatagramPacket packet = new DatagramPacket(RECEIVE_BUFFER, 28, RECEIVE_BUFFER.length - 28);
+            HttpLoggingInterceptor interceptor = new HttpLoggingInterceptor();
+            interceptor.setLevel(HttpLoggingInterceptor.Level.BODY);
+//            mOkHttpClient = new OkHttpClient();
+            mOkHttpClient  = new OkHttpClient.Builder()
+                    .connectionSpecs(Arrays.asList(ConnectionSpec.MODERN_TLS, ConnectionSpec.COMPATIBLE_TLS, ConnectionSpec.CLEARTEXT))
+                    .build();
+//            .newBuilder().addInterceptor(interceptor).build();
+//            .dns(new DnsOverHttps.Builder().client(mOkHttpClient).url(HttpUrl.get("https://dns.google.com")).build())
+            //.newBuilder().addInterceptor(interceptor).build();
+
+
+//            try {
+//                mDnsOverHttpsGoogleExperimental = new DnsOverHttps.Builder()
+//                        .client(mOkHttpClient)
+//                        .url(HttpUrl.get("https://dns.google.com/experimental"))
+//                        .bootstrapDnsHosts(InetAddress.getByName("216.58.204.78"),
+//                                InetAddress.getByName("2a00:1450:4009:814:0:0:0:200e"))
+//                        .build();
+//
+//            } catch (UnknownHostException e) {
+//                e.printStackTrace();
+//            }
+//
+            mDnsOverHttpsGoogle = new DnsOverHttps.Builder()
+                    .client(mOkHttpClient)
+                    .url(HttpUrl.get("https://dns.google.com"))
+                    .build();
 
             while (mClient != null && !mClient.isClosed()) {
 
@@ -88,7 +128,7 @@ public class DnsProxy implements Runnable {
                 try {
                     DnsPacket dnsPacket = DnsPacket.FromBytes(dnsBuffer);
                     if (dnsPacket != null) {
-                        OnDnsResponseReceived(ipHeader, udpHeader, dnsPacket);
+                        onDnsResponseReceived(ipHeader, udpHeader, dnsPacket);
                     }
                 } catch (Exception e) {
                     e.printStackTrace();
@@ -98,7 +138,7 @@ public class DnsProxy implements Runnable {
         } catch (Exception e) {
             e.printStackTrace();
         } finally {
-           Log.d(" TODEL ","DnsResolver Thread Exited.");
+            Log.d(" TODEL ", "DnsResolver Thread Exited.");
             this.stop();
         }
     }
@@ -123,8 +163,8 @@ public class DnsProxy implements Runnable {
 
         ResourcePointer rPointer = new ResourcePointer(rawPacket, question.Offset() + question.Length());
         rPointer.setDomain((short) 0xC00C);
-        rPointer.setType(question.Type);
-        rPointer.setClass(question.Class);
+        rPointer.setType(question.mType);
+        rPointer.setClass(question.mClass);
 //        rPointer.setTTL(ProxyConfigLoader.getsInstance().getDnsTTL());
         rPointer.setDataLength((short) 4);
         rPointer.setIP(newIP);
@@ -132,56 +172,113 @@ public class DnsProxy implements Runnable {
         dnsPacket.Size = 12 + question.Length() + 16;
     }
 
-    private int getOrCreateFakeIP(String domainString) {
-        Log.d("REPLACE>", "getOrCreateFakeIP() called with: domainString = [" + domainString + "]");
-        //todo replace this to http ask
-        Integer fakeIP = DomainIPMaps.get(domainString);
-        if (fakeIP == null) {
-            int hashIP = domainString.hashCode();
-            do {
-                fakeIP = ProxyUtils.fakeIP(hashIP);
-                hashIP++;
-            } while (IPDomainMaps.containsKey(fakeIP));
+    DatagramPacket mInDnsPacket;
+    private OkHttpClient mOkHttpClient;
+    private DnsOverHttps mDnsOverHttpsGoogleExperimental;
+    private DnsOverHttps mDnsOverHttpsGoogle;
 
-            DomainIPMaps.put(domainString, fakeIP);
-            IPDomainMaps.put(fakeIP, domainString);
+    // proxyUrl
+    private String downloadDOHdata(String data) throws Exception {
+        //            curl -i 'https://dns.google/resolve?name=example.com&type=a&do=1'
+        InetAddress tmpaddr = InetAddress.getByName("216.239.34.105");
+        Request request = new Request.Builder()
+
+                .url(URL_DNS_GET + data)
+                .addHeader("accept", "application/dns-message")
+                .addHeader("content-type", "application/dns-message").get()
+                .build();
+//mDnsOverHttpsGoogleExperimental.
+        try {
+            Response response = mOkHttpClient.newCall(request).execute();
+            byte[] responseBytes = response.body().bytes();
+            String line = response.body().string();
+            Log.d("TAG", "downloadDOHdata() response.body().string() data = [" + line + "]");
+//           codec= DnsRecordCodec.decodeAnswers(hostname, ByteString.of(responseBytes));
+//            mInDnsPacket.setData(responseBytes);
+            return line;
+//            mServerSocket.send(mPacket);
+        } catch (Exception e) {
+            e.printStackTrace();
         }
-        Log.d("REPLACE>", "fakeIP = [" + domainString + "]");
-        return fakeIP;
+        return "";
     }
 
-    private boolean dnsPollution(byte[] rawPacket, DnsPacket dnsPacket) {
+    // proxyUrl
+    private String downloadDOHDomaindata(String data) throws Exception {
+        //            curl -i 'https://dns.google/resolve?name=example.com&type=a&do=1'
+        Request request = new Request.Builder()
+                .url("https://dns.google/resolve?name=" + data)
+                .addHeader("accept", "application/dns-message")
+                .addHeader("content-type", "application/dns-message").get()
+                .build();
+//mDnsOverHttpsGoogleExperimental.
+        try {
+            Response response = mOkHttpClient.newCall(request).execute();
+            byte[] responseBytes = response.body().bytes();
+            String line = response.body().string();
+            Log.d("TAG", "downloadDOHdata() response.body().string() data = [" + line + "]");
+//           codec= DnsRecordCodec.decodeAnswers(hostname, ByteString.of(responseBytes));
+//            mInDnsPacket.setData(responseBytes);
+            return line;
+//            mServerSocket.send(mPacket);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return "";
+    }
+
+    private int getOrCreateSubstituteForIP(String domainString) {
+        Log.d("REPLACE>", "getOrCreateSubstituteForIP called with: domainString = [" + domainString + "]");
+        //todo replace this to http ask
+        Integer substIP = DomainIPMaps.get(domainString);
+        if (substIP == null) {
+            int hashIP = domainString.hashCode();
+            do {
+                substIP = ProxyUtils.fakeIP(hashIP);
+                hashIP++;
+            } while (IPDomainMaps.containsKey(substIP));
+
+            DomainIPMaps.put(domainString, substIP);
+            IPDomainMaps.put(substIP, domainString);
+        }
+        Log.d("REPLACE>", "substIP = [" + domainString + "]");
+        return substIP;
+    }
+
+    private boolean dnsSubstitute(byte[] rawPacket, DnsPacket dnsPacket) {
         if (dnsPacket.Header.QuestionCount > 0) {
             Question question = dnsPacket.Questions[0];
-            if (question.Type == 1) {
+            if (question.mType == 1) {
                 int realIP = getFirstIP(dnsPacket);
-//                todo check this
-//                if (ProxyConfigLoader.getsInstance().needProxy(question.Domain, realIP)) {
-                int fakeIP = getOrCreateFakeIP(question.Domain);
-                tamperedDnsResponse(rawPacket, dnsPacket, fakeIP);
-                if (IS_DEBUG)
-                    System.out.printf("FakeDns: %s=>%s(%s)\n", question.Domain, ProxyUtils.ipIntToString(realIP), ProxyUtils.ipIntToString(fakeIP));
+                int substIP = getOrCreateSubstituteForIP(question.mDomain);
+                tamperedDnsResponse(rawPacket, dnsPacket, substIP);
+                if (IS_DEBUG) {
+                    System.out.printf("SubstitutedDns: %s=>%s(%s)\n", question.mDomain,
+                            ProxyUtils.ipIntToString(realIP), ProxyUtils.ipIntToString(substIP));
+                }
                 return true;
-//                }
             }
         }
         return false;
     }
 
-    private void OnDnsResponseReceived(IPHeader ipHeader, UDPHeader udpHeader, DnsPacket dnsPacket) {
-        Log.d("TODEL", "OnDnsResponseReceived() called with: ipHeader = [" + ipHeader + "], udpHeader = [" + udpHeader + "], dnsPacket = [" + dnsPacket + "]");
+    private void onDnsResponseReceived(IPHeader ipHeader, UDPHeader udpHeader, DnsPacket dnsPacket) {
+        Log.d("TODEL",
+                " on Dns Response Received with: ipHeader = [" + ipHeader + "], udpHeader = [" + udpHeader +
+                        "], dnsPacket = [" + dnsPacket + "]");
         QueryState state = null;
         synchronized (mQueryArray) {
             state = mQueryArray.get(dnsPacket.Header.ID);
             if (state != null) {
+                Log.d("TODEL",
+                        "Dns Query Array remove key with indexOfKey = [" + mQueryArray.indexOfKey(dnsPacket.Header.ID) + "] key " + dnsPacket.Header.ID);
                 mQueryArray.remove(dnsPacket.Header.ID);
+
             }
         }
 
         if (state != null) {
-            //DNS pollution, polluting overseas websites by default
-            dnsPollution(udpHeader.m_Data, dnsPacket);
-
+            dnsSubstitute(udpHeader.m_Data, dnsPacket);
             dnsPacket.Header.setID(state.ClientQueryID);
             ipHeader.setSourceIP(state.RemoteIP);
             ipHeader.setDestinationIP(state.ClientIP);
@@ -195,26 +292,18 @@ public class DnsProxy implements Runnable {
         }
     }
 
-    private int getIPFromCache(String domain) {
-        Integer ip = DomainIPMaps.get(domain);
-        if (ip == null) {
-            return 0;
-        } else {
-            return ip;
-        }
-    }
 
     private boolean reallyNeedToInterceptThisDns(IPHeader ipHeader, UDPHeader udpHeader, DnsPacket dnsPacket) {
         Question question = dnsPacket.Questions[0];
-       Log.d(" TODEL ","DNS Query intercepted> " + Arrays.toString(dnsPacket.Questions));
-        Log.d(" TODEL ","DNS Query data> " + question.toString());
-        if (question.Type == 1) {
+        Log.d(" TODEL ", "DNS Query intercepted> " + Arrays.toString(dnsPacket.Questions));
+        if (question.mType == 1) {
 
 //            int fakeIP = getOrCreateFakeIP(question.Domain);
 //            tamperedDnsResponse(ipHeader.mData, dnsPacket, fakeIP);
 //
 //            if (IS_DEBUG)
-//                System.out.printf("interceptDns FakeDns: %s=>%s\n", question.Domain, ProxyUtils.ipIntToString(fakeIP));
+//                System.out.printf("interceptDns FakeDns: %s=>%s\n", question.Domain, ProxyUtils
+//                .ipIntToString(fakeIP));
 
             int sourceIP = ipHeader.getSourceIP();
             short sourcePort = udpHeader.getSourcePort();
@@ -243,41 +332,47 @@ public class DnsProxy implements Runnable {
     }
 
     public void onDnsRequestReceived(IPHeader ipHeader, UDPHeader udpHeader, DnsPacket dnsPacket) {
-        Log.d("TODEL", "onDnsRequestReceived() called with: ipHeader = [" + ipHeader + "], udpHeader = [" + udpHeader + "], dnsPacket = [" + dnsPacket + "]");
-        if (!reallyNeedToInterceptThisDns(ipHeader, udpHeader, dnsPacket)) {
-            
-            //Simply Forward  DNS
-            QueryState state = new QueryState();
-            state.ClientQueryID = dnsPacket.Header.ID;
-            state.QueryNanoTime = System.nanoTime();
-            state.ClientIP = ipHeader.getSourceIP();
-            state.ClientPort = udpHeader.getSourcePort();
-            state.RemoteIP = ipHeader.getDestinationIP();
-            state.RemotePort = udpHeader.getDestinationPort();
+        Log.d("TODEL",
+                "on Dns Request with: ipHeader = [" + ipHeader + "], udpHeader = [" + udpHeader + "], " +
+                        "dnsPacket = [" + dnsPacket.toString() + "]");
+//        if (!reallyNeedToInterceptThisDns(ipHeader, udpHeader, dnsPacket)) {
+        //Simply Forward  DNS
 
-            // Conversion QueryID
-            mQueryID++;// increase ID
-            dnsPacket.Header.setID(mQueryID);
+        QueryState state = new QueryState();
+        state.ClientQueryID = dnsPacket.Header.ID;
+        state.QueryNanoTime = System.nanoTime();
+        state.ClientIP = ipHeader.getSourceIP();
+        state.ClientPort = udpHeader.getSourcePort();
+        state.RemoteIP = ipHeader.getDestinationIP();
+        state.RemotePort = udpHeader.getDestinationPort();
+        // Conversion QueryID
+        mQueryID++;// increase ID
+        dnsPacket.Header.setID(mQueryID);
+        synchronized (mQueryArray) {
+            clearExpiredQueries();//Clear outdated queries to reduce memory overhead.
+            mQueryArray.put(mQueryID, state);// Linked data
+            Log.d("TODEL", "Dns Query Array saved to indexOfKey = [" + mQueryArray.indexOfKey(mQueryID) + "] " +
+                    "key  " + mQueryID);
+        }
+        String tmpstr;
 
-            synchronized (mQueryArray) {
-                clearExpiredQueries();//Clear outdated queries to reduce memory overhead.
-                mQueryArray.put(mQueryID, state);// Linked data
+        InetSocketAddress remoteAddress =
+                new InetSocketAddress(ProxyUtils.ipIntToInet4Address(state.RemoteIP), state.RemotePort);
+        DatagramPacket packet = new DatagramPacket(udpHeader.m_Data, udpHeader.m_Offset + 8, dnsPacket.Size);
+        packet.setSocketAddress(remoteAddress);
+
+        try {
+//            its send packet
+            if (LocalVpnService.getInstance().protect(mClient)) {
+                mClient.send(packet);
             }
-
-            InetSocketAddress remoteAddress = new InetSocketAddress(ProxyUtils.ipIntToInet4Address(state.RemoteIP), state.RemotePort);
-            DatagramPacket packet = new DatagramPacket(udpHeader.m_Data, udpHeader.m_Offset + 8, dnsPacket.Size);
-            packet.setSocketAddress(remoteAddress);
-
-            try {
-                if (LocalVpnService.getInstance().protect(mClient)) {
-                    mClient.send(packet);
-                } else {
-                    System.err.println("VPN protect udp socket failed.");
-                }
-            } catch (IOException e) {
-                // TODO Auto-generated catch block
-                e.printStackTrace();
-            }
+            tmpstr = downloadDOHdata(new String(dnsPacket.Header.Data));
+//            example.com&type=a&do=1'
+//            tmpstr = downloadDOHDomaindata((new String(dnsPacket.Questions[0].toRespStr())));
+        } catch (IOException e) {
+            System.err.println(e.getMessage());
+        } catch (Exception e) {
+            System.err.println(e.getMessage());
         }
     }
 }

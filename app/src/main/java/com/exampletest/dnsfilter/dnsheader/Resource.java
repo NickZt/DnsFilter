@@ -1,6 +1,7 @@
 package com.exampletest.dnsfilter.dnsheader;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 
 public class Resource {
     public String Domain;
@@ -22,9 +23,9 @@ public class Resource {
         return length;
     }
 
-    public static  Resource FromBytes(ByteBuffer buffer) {
+    public static Resource FromBytes(ByteBuffer buffer) {
 
-         Resource r = new  Resource();
+        Resource r = new Resource();
         r.offset = buffer.arrayOffset() + buffer.position();
         r.Domain = DnsPacket.ReadDomain(buffer, buffer.arrayOffset());
         r.Type = buffer.getShort();
@@ -35,6 +36,20 @@ public class Resource {
         buffer.get(r.Data);
         r.length = buffer.arrayOffset() + buffer.position() - r.offset;
         return r;
+    }
+
+    @Override
+    public String toString() {
+        return "Resource{" +
+                "Domain='" + Domain + '\'' +
+                ", Type=" + Type +
+                ", Class=" + Class +
+                ", TTL=" + TTL +
+                ", DataLength=" + DataLength +
+                ", Data=" + Arrays.toString(Data) +
+                ", offset=" + offset +
+                ", length=" + length +
+                '}';
     }
 
     public void ToBytes(ByteBuffer buffer) {

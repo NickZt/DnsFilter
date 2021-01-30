@@ -3,6 +3,7 @@ package com.exampletest.dnsfilter.tcpip;
 
 import com.exampletest.dnsfilter.utils.ProxyUtils;
 
+import java.util.Arrays;
 import java.util.Locale;
 
 public class IPHeader {
@@ -126,6 +127,13 @@ public class IPHeader {
         ProxyUtils.writeInt(mData, mOffset + offset_dest_ip, value);
     }
 
+    public String toStringWithRaw() {
+        return  String.format(Locale.ENGLISH, "%s->%s Pro=%s,HLen=%d", ProxyUtils.ipIntToString(getSourceIP()), ProxyUtils.ipIntToString(getDestinationIP()), getProtocol(), getHeaderLength())+
+                " RAW Data IPHeader{" +
+                "mData=" + Arrays.toString(mData) +
+                ", mOffset=" + mOffset +
+                '}';
+    }
     @Override
     public String toString() {
         return String.format(Locale.ENGLISH, "%s->%s Pro=%s,HLen=%d", ProxyUtils.ipIntToString(getSourceIP()), ProxyUtils.ipIntToString(getDestinationIP()), getProtocol(), getHeaderLength());

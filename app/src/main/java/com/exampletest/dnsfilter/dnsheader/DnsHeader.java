@@ -4,6 +4,8 @@ package com.exampletest.dnsfilter.dnsheader;
 import com.exampletest.dnsfilter.utils.ProxyUtils;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.Locale;
 
 
 public class DnsHeader {
@@ -95,5 +97,20 @@ public class DnsHeader {
 
     public void setEResourceCount(short value) {
         ProxyUtils.writeShort(Data, Offset + offset_EResourceCount, value);
+    }
+
+    @Override
+    public String toString() {
+        return "DnsHeader{" +
+                "ID=" + ID +
+                ", Flags=" + Flags +
+                ", QuestionCount=" + QuestionCount +
+                ", ResourceCount=" + ResourceCount +
+                ", AResourceCount=" + AResourceCount +
+                ", EResourceCount=" + EResourceCount +
+                ", Data=" + String.format(Locale.ENGLISH, "Questions count %s Id=%s ", getQuestionCount(), getID()) +
+//                Arrays.toString(Data) +
+                ", Offset=" + Offset +
+                '}';
     }
 }

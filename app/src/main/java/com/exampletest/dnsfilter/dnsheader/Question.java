@@ -3,9 +3,9 @@ package com.exampletest.dnsfilter.dnsheader;
 import java.nio.ByteBuffer;
 
 public class Question {
-    public String Domain;
-    public short Type;
-    public short Class;
+    public String mDomain;
+    public short mType;
+    public short mClass;
 
     private int offset;
 
@@ -19,26 +19,32 @@ public class Question {
         return length;
     }
 
-    public static  Question FromBytes(ByteBuffer buffer) {
-         Question q = new  Question();
+    public static Question FromBytes(ByteBuffer buffer) {
+        Question q = new Question();
         q.offset = buffer.arrayOffset() + buffer.position();
-        q.Domain = DnsPacket.ReadDomain(buffer, buffer.arrayOffset());
-        q.Type = buffer.getShort();
-        q.Class = buffer.getShort();
+        q.mDomain = DnsPacket.ReadDomain(buffer, buffer.arrayOffset());
+        q.mType = buffer.getShort();
+        q.mClass = buffer.getShort();
         q.length = buffer.arrayOffset() + buffer.position() - q.offset;
         return q;
     }
 
     public void ToBytes(ByteBuffer buffer) {
         this.offset = buffer.position();
-        DnsPacket.WriteDomain(this.Domain, buffer);
-        buffer.putShort(this.Type);
-        buffer.putShort(this.Class);
+        DnsPacket.WriteDomain(this.mDomain, buffer);
+        buffer.putShort(this.mType);
+        buffer.putShort(this.mClass);
         this.length = buffer.position() - this.offset;
     }
 
     @Override
     public String toString() {
-        return ("Domain [" +Domain + "], Type " + Type+ ", Class " + Class );
+        return ("Domain [" + mDomain + "], Type " + mType + ", Class " + mClass);
+    }
+
+    public String toRespStr() {
+        //            example.com&type=a&do=1'
+
+        return mDomain + "&type=a&do=" + mClass;
     }
 }

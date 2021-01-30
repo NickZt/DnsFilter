@@ -24,6 +24,20 @@ public class DnsFlags {
         return flags;
     }
 
+    @Override
+    public String toString() {
+        return "DnsFlags{" +
+                "QR=" + QR +
+                ", OpCode=" + OpCode +
+                ", AA=" + AA +
+                ", TC=" + TC +
+                ", RD=" + RD +
+                ", RA=" + RA +
+                ", Zero=" + Zero +
+                ", Rcode=" + Rcode +
+                '}';
+    }
+
     public short ToShort() {
         int m_Flags = 0;
         m_Flags |= (this.QR ? 1 : 0) << 7;

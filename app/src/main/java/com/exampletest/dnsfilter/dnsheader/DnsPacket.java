@@ -1,49 +1,55 @@
 package com.exampletest.dnsfilter.dnsheader;
 
+import androidx.annotation.NonNull;
+
+import com.exampletest.dnsfilter.utils.ProxyUtils;
+
 import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.Locale;
 
 public class DnsPacket {
-    public  DnsHeader Header;
-    public  Question[] Questions;
-    public  Resource[] Resources;
-    public  Resource[] AResources;
-    public  Resource[] EResources;
+    public DnsHeader Header;
+    public Question[] Questions;
+    public Resource[] Resources;
+    public Resource[] AResources;
+    public Resource[] EResources;
 
     public int Size;
 
-    public static  DnsPacket FromBytes(ByteBuffer buffer) {
+    public static DnsPacket FromBytes(ByteBuffer buffer) {
         if (buffer.limit() < 12)
             return null;
         if (buffer.limit() > 512)
             return null;
 
-         DnsPacket packet = new  DnsPacket();
+        DnsPacket packet = new DnsPacket();
         packet.Size = buffer.limit();
-        packet.Header =  DnsHeader.FromBytes(buffer);
+        packet.Header = DnsHeader.FromBytes(buffer);
 
         if (packet.Header.QuestionCount > 2 || packet.Header.ResourceCount > 50 || packet.Header.AResourceCount > 50 || packet.Header.EResourceCount > 50) {
             return null;
         }
 
-        packet.Questions = new  Question[packet.Header.QuestionCount];
-        packet.Resources = new  Resource[packet.Header.ResourceCount];
-        packet.AResources = new  Resource[packet.Header.AResourceCount];
-        packet.EResources = new  Resource[packet.Header.EResourceCount];
+        packet.Questions = new Question[packet.Header.QuestionCount];
+        packet.Resources = new Resource[packet.Header.ResourceCount];
+        packet.AResources = new Resource[packet.Header.AResourceCount];
+        packet.EResources = new Resource[packet.Header.EResourceCount];
 
         for (int i = 0; i < packet.Questions.length; i++) {
-            packet.Questions[i] =  Question.FromBytes(buffer);
+            packet.Questions[i] = Question.FromBytes(buffer);
         }
 
         for (int i = 0; i < packet.Resources.length; i++) {
-            packet.Resources[i] =  Resource.FromBytes(buffer);
+            packet.Resources[i] = Resource.FromBytes(buffer);
         }
 
         for (int i = 0; i < packet.AResources.length; i++) {
-            packet.AResources[i] =  Resource.FromBytes(buffer);
+            packet.AResources[i] = Resource.FromBytes(buffer);
         }
 
         for (int i = 0; i < packet.EResources.length; i++) {
-            packet.EResources[i] =  Resource.FromBytes(buffer);
+            packet.EResources[i] = Resource.FromBytes(buffer);
         }
 
         return packet;
@@ -127,5 +133,17 @@ public class DnsPacket {
                 buffer.put((byte) item.codePointAt(i));
             }
         }
+    }
+
+    @Override
+    public String toString() {
+        return "DnsPacket{" +
+                "Header=" + Header.toString() +
+                ", Questions=" + Arrays.toString(Questions) +
+                ", Resources=" + Arrays.toString(Resources) +
+                ", AResources=" + Arrays.toString(AResources) +
+                ", EResources=" + Arrays.toString(EResources) +
+                ", Size=" + Size +
+                '}';
     }
 }
