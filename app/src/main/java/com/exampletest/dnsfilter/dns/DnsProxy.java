@@ -12,15 +12,24 @@ import com.exampletest.dnsfilter.tcpip.IPHeader;
 import com.exampletest.dnsfilter.tcpip.UDPHeader;
 import com.exampletest.dnsfilter.utils.ProxyUtils;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.concurrent.ConcurrentHashMap;
+
+import javax.net.ssl.SSLSocket;
+import javax.net.ssl.SSLSocketFactory;
 
 import okhttp3.ConnectionSpec;
 import okhttp3.HttpUrl;
@@ -93,11 +102,13 @@ public class DnsProxy implements Runnable {
             HttpLoggingInterceptor interceptor = new HttpLoggingInterceptor();
             interceptor.setLevel(HttpLoggingInterceptor.Level.BODY);
 //            mOkHttpClient = new OkHttpClient();
-            mOkHttpClient  = new OkHttpClient.Builder()
-                    .connectionSpecs(Arrays.asList(ConnectionSpec.MODERN_TLS, ConnectionSpec.COMPATIBLE_TLS, ConnectionSpec.CLEARTEXT))
+            mOkHttpClient = new OkHttpClient.Builder()
+                    .connectionSpecs(Arrays.asList(ConnectionSpec.MODERN_TLS, ConnectionSpec.COMPATIBLE_TLS,
+                            ConnectionSpec.CLEARTEXT))
                     .build();
 //            .newBuilder().addInterceptor(interceptor).build();
-//            .dns(new DnsOverHttps.Builder().client(mOkHttpClient).url(HttpUrl.get("https://dns.google.com")).build())
+//            .dns(new DnsOverHttps.Builder().client(mOkHttpClient).url(HttpUrl.get("https://dns.google.com")
+//            ).build())
             //.newBuilder().addInterceptor(interceptor).build();
 
 
@@ -179,29 +190,138 @@ public class DnsProxy implements Runnable {
 
     // proxyUrl
     private String downloadDOHdata(String data) throws Exception {
-        //            curl -i 'https://dns.google/resolve?name=example.com&type=a&do=1'
-        InetAddress tmpaddr = InetAddress.getByName("216.239.34.105");
-        Request request = new Request.Builder()
-
-                .url(URL_DNS_GET + data)
-                .addHeader("accept", "application/dns-message")
-                .addHeader("content-type", "application/dns-message").get()
-                .build();
-//mDnsOverHttpsGoogleExperimental.
-        try {
-            Response response = mOkHttpClient.newCall(request).execute();
-            byte[] responseBytes = response.body().bytes();
-            String line = response.body().string();
-            Log.d("TAG", "downloadDOHdata() response.body().string() data = [" + line + "]");
-//           codec= DnsRecordCodec.decodeAnswers(hostname, ByteString.of(responseBytes));
-//            mInDnsPacket.setData(responseBytes);
-            return line;
-//            mServerSocket.send(mPacket);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        return "";
+//        //            curl -i 'https://dns.google/resolve?name=example.com&type=a&do=1'
+//        InetAddress tmpaddr = InetAddress.getByName("216.239.34.105");
+//        Request request = new Request.Builder()
+//
+//                .url(URL_DNS_GET + data)
+//                .addHeader("accept", "application/dns-message")
+//                .addHeader("content-type", "application/dns-message").get()
+//                .build();
+////mDnsOverHttpsGoogleExperimental.
+//        try {
+//            Response response = mOkHttpClient.newCall(request).execute();
+//            byte[] responseBytes = response.body().bytes();
+//            String line = response.body().string();
+//            Log.d("TAG", "downloadDOHdata() response.body().string() data = [" + line + "]");
+////           codec= DnsRecordCodec.decodeAnswers(hostname, ByteString.of(responseBytes));
+////            mInDnsPacket.setData(responseBytes);
+//            return line;
+////            mServerSocket.send(mPacket);
+//        } catch (Exception e) {
+//            e.printStackTrace();
+//        }
+        return sendHttpReq(data);
     }
+
+    public String sendHttpReq(String data) throws Exception {
+        Log.d("TAG", "sendHttpReq() called with: data = [" + "]");
+        //Instantiate a new socket
+        Socket s = null;
+//        s = new Socket("www.dns.google", 8080);
+
+        if (s == null) {
+            Log.d("TAG", "sendHttpReq() s == null = [" + "]");
+            try {
+                InetAddress tmpaddr = InetAddress.getByName("8.8.8.8");//"216.239.34.105"
+                System.out.println(tmpaddr.getHostName());
+                Log.d("TAG", "sendHttpReq() tmpaddr.getHostName() = [" + tmpaddr.getHostName() + "]");
+                s = new Socket(tmpaddr, 80);
+            } catch (Exception e) {
+                Log.d("TAG", "error [" + e.getMessage() + "]");
+            }
+
+        } else {
+            Log.d("TAG", "s.getInetAddress().getHostName() [" + s.getInetAddress().getHostName() + "]");
+//            System.out.println(s.getInetAddress().getHostName());
+        }
+        try (final DatagramSocket socket = new DatagramSocket()) {
+            socket.connect(InetAddress.getByName("8.8.8.8"), 8080);
+            String ip = socket.getLocalAddress().getHostAddress();
+            Log.d("TAG", "ip [" + ip + "]");
+        }
+
+        Socket socket = new Socket();
+        socket.connect(new InetSocketAddress("google.com", 80));
+        Log.d("TAG", "socket.getLocalAddress() [" + socket.getLocalAddress() + "]");
+
+        //Instantiates a new PrintWriter passing in the sockets output stream
+        PrintWriter wtr = new PrintWriter(s.getOutputStream());// s.getOutputStream()
+
+        //Prints the request string to the output stream
+        wtr.print("GET /resolve?name=example.com&type=a&do=1 HTTP/1.1 \r\n");
+        wtr.print("Host: google.com \\r\\n\\r\\n");
+//        wtr.println("");
+        wtr.flush();
+
+//        / Constructe a HTTP GET request
+//        // The end of HTTP GET request should be \r\n\r\n
+//        String request = "GET " + path + "?" + data + " HTTP/1.0\r\n"
+//                + "Accept: */*\r\n" + "Host: "+host+"\r\n"
+//                + "Connection: Close\r\n\r\n";
+//
+//        // Sends off HTTP GET request
+//        out.write(request.getBytes());
+//        out.flush();
+
+
+        //Creates a BufferedReader that contains the server response
+        BufferedReader bufRead = new BufferedReader(new InputStreamReader(s != null ? s.getInputStream() :
+                null));
+        String outStr, outOStr = "";
+
+
+        //Prints each line of the response
+        while ((outStr = bufRead.readLine()) != null) {
+            outOStr = outOStr + outStr;
+            System.out.println(outStr);
+        }
+        Log.d("TAG", "sendHttpReq() return outStr = [" + outStr + "]");
+
+        //Closes out buffer and writer
+        bufRead.close();
+        wtr.close();
+
+        try {
+            SSLSocketFactory factory =
+                    (SSLSocketFactory) SSLSocketFactory.getDefault();
+            SSLSocket sslSocket =
+                    (SSLSocket) factory.createSocket("www.dns.google", 443);
+            sslSocket.startHandshake();
+
+            PrintWriter out = new PrintWriter(
+                    new BufferedWriter(
+                            new OutputStreamWriter(
+                                    sslSocket.getOutputStream())));
+
+            out.println("GET / HTTP/1.0");
+            out.println();
+            out.flush();
+            if (out.checkError()) {
+                System.out.println(
+                        "SSLSocketClient:  java.io.PrintWriter error");
+            }
+
+            /* read response */
+            BufferedReader in = new BufferedReader(
+                    new InputStreamReader(
+                            sslSocket.getInputStream()));
+
+            String inputLine;
+            while ((inputLine = in.readLine()) != null)
+                System.out.println(inputLine);
+
+            in.close();
+            out.close();
+            sslSocket.close();
+        } catch (Exception e) {
+            Log.d("TAG", "Exception  [" + e.getMessage() + "]");
+        }
+
+
+        return outOStr;
+    }
+
 
     // proxyUrl
     private String downloadDOHDomaindata(String data) throws Exception {

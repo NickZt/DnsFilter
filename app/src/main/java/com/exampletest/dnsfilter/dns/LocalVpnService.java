@@ -330,11 +330,11 @@ public class LocalVpnService extends VpnService implements Runnable {
         }
         LOCAL_IP = ProxyUtils.ipStringToInt("10.0.2.15");
 
-        builder.addAddress("10.0.0.2", 24);  // Only IPv4 support for now
+        builder.addAddress("10.0.2.15", 24);
 
         builder.addDnsServer("8.8.8.8");
 
-        builder.addRoute("0.0.0.0", 32);
+        builder.addRoute("8.8.8.8", 32);
         if (IS_DEBUG) {
             System.out.printf("addDefaultRoute: 8.8.8.8/0\n");
         }
