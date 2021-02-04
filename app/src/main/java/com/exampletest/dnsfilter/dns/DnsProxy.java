@@ -190,31 +190,37 @@ public class DnsProxy implements Runnable {
 
     // proxyUrl
     private String downloadDOHdata(String data) throws Exception {
-//        //            curl -i 'https://dns.google/resolve?name=example.com&type=a&do=1'
-//        InetAddress tmpaddr = InetAddress.getByName("216.239.34.105");
-//        Request request = new Request.Builder()
-//
-//                .url(URL_DNS_GET + data)
-//                .addHeader("accept", "application/dns-message")
-//                .addHeader("content-type", "application/dns-message").get()
-//                .build();
-////mDnsOverHttpsGoogleExperimental.
-//        try {
-//            Response response = mOkHttpClient.newCall(request).execute();
-//            byte[] responseBytes = response.body().bytes();
-//            String line = response.body().string();
-//            Log.d("TAG", "downloadDOHdata() response.body().string() data = [" + line + "]");
-////           codec= DnsRecordCodec.decodeAnswers(hostname, ByteString.of(responseBytes));
-////            mInDnsPacket.setData(responseBytes);
-//            return line;
-////            mServerSocket.send(mPacket);
-//        } catch (Exception e) {
-//            e.printStackTrace();
-//        }
-        return sendHttpReq(data);
+
+        return sendHttpSReq(data);
+    }
+    public String sendOkHttpReq(String data) throws Exception {
+        String outStr, outOStr = "";
+        //            curl -i 'https://dns.google/resolve?name=example.com&type=a&do=1'
+        InetAddress tmpaddr = InetAddress.getByName("216.239.34.105");
+        Request request = new Request.Builder()
+
+                .url(URL_DNS_GET + data)
+                .addHeader("accept", "application/dns-message")
+                .addHeader("content-type", "application/dns-message").get()
+                .build();
+//mDnsOverHttpsGoogleExperimental.
+        try {
+            Response response = mOkHttpClient.newCall(request).execute();
+            byte[] responseBytes = response.body().bytes();
+            String line = response.body().string();
+            Log.d("TAG", "downloadDOHdata() response.body().string() data = [" + line + "]");
+//           codec= DnsRecordCodec.decodeAnswers(hostname, ByteString.of(responseBytes));
+//            mInDnsPacket.setData(responseBytes);
+            return line;
+//            mServerSocket.send(mPacket);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return outOStr;
     }
 
     public String sendHttpReq(String data) throws Exception {
+        String outStr, outOStr = "";
         Log.d("TAG", "sendHttpReq() called with: data = [" + "]");
         //Instantiate a new socket
         Socket s = null;
@@ -254,8 +260,8 @@ public class DnsProxy implements Runnable {
 //        wtr.println("");
         wtr.flush();
 
-//        / Constructe a HTTP GET request
-//        // The end of HTTP GET request should be \r\n\r\n
+       // Constructe a HTTP GET request
+        // The end of HTTP GET request should be \r\n\r\n
 //        String request = "GET " + path + "?" + data + " HTTP/1.0\r\n"
 //                + "Accept: */*\r\n" + "Host: "+host+"\r\n"
 //                + "Connection: Close\r\n\r\n";
@@ -268,7 +274,7 @@ public class DnsProxy implements Runnable {
         //Creates a BufferedReader that contains the server response
         BufferedReader bufRead = new BufferedReader(new InputStreamReader(s != null ? s.getInputStream() :
                 null));
-        String outStr, outOStr = "";
+
 
 
         //Prints each line of the response
@@ -282,11 +288,16 @@ public class DnsProxy implements Runnable {
         bufRead.close();
         wtr.close();
 
+        return outOStr;
+    }
+    public String sendHttpSReq(String data) throws Exception {
+        String outStr, outOStr = "";
+
         try {
             SSLSocketFactory factory =
                     (SSLSocketFactory) SSLSocketFactory.getDefault();
             SSLSocket sslSocket =
-                    (SSLSocket) factory.createSocket("www.dns.google", 443);
+                    (SSLSocket) factory.createSocket("8.8.8.8", 443);
             sslSocket.startHandshake();
 
             PrintWriter out = new PrintWriter(
@@ -308,9 +319,11 @@ public class DnsProxy implements Runnable {
                             sslSocket.getInputStream()));
 
             String inputLine;
-            while ((inputLine = in.readLine()) != null)
+            while ((inputLine = in.readLine()) != null) {
                 System.out.println(inputLine);
-
+                outOStr=outOStr+inputLine;
+                Log.d("TAG", "System.out.println(inputLine); = [" + inputLine + "]");
+            }
             in.close();
             out.close();
             sslSocket.close();
