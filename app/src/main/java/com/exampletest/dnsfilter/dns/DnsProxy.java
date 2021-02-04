@@ -14,8 +14,11 @@ import com.exampletest.dnsfilter.utils.ProxyUtils;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.net.DatagramPacket;
@@ -193,6 +196,7 @@ public class DnsProxy implements Runnable {
 
         return sendHttpSReq(data);
     }
+
     public String sendOkHttpReq(String data) throws Exception {
         String outStr, outOStr = "";
         //            curl -i 'https://dns.google/resolve?name=example.com&type=a&do=1'
@@ -260,21 +264,9 @@ public class DnsProxy implements Runnable {
 //        wtr.println("");
         wtr.flush();
 
-       // Constructe a HTTP GET request
-        // The end of HTTP GET request should be \r\n\r\n
-//        String request = "GET " + path + "?" + data + " HTTP/1.0\r\n"
-//                + "Accept: */*\r\n" + "Host: "+host+"\r\n"
-//                + "Connection: Close\r\n\r\n";
-//
-//        // Sends off HTTP GET request
-//        out.write(request.getBytes());
-//        out.flush();
-
-
         //Creates a BufferedReader that contains the server response
         BufferedReader bufRead = new BufferedReader(new InputStreamReader(s != null ? s.getInputStream() :
                 null));
-
 
 
         //Prints each line of the response
@@ -290,6 +282,77 @@ public class DnsProxy implements Runnable {
 
         return outOStr;
     }
+
+    public static void HTTP_Request(String host, int port, String path,
+                                    String method, String data) throws UnknownHostException, IOException {
+        //Resolve the hostname to an IP address
+        InetAddress ip = InetAddress.getByName(host);
+
+        //Open socket to a specific host and port
+        Socket socket = new Socket(host, port);
+
+        //Get input and output streams for the socket
+        OutputStream out = socket.getOutputStream();
+        InputStream in = socket.getInputStream();
+
+        // HTTP GET
+        if (method.equals("GET")) {
+            // Constructe a HTTP GET request
+            // The end of HTTP GET request should be \r\n\r\n
+            String request = "GET " + path + "?" + data + " HTTP/1.0\r\n"
+                    + "Accept: */*\r\n" + "Host: " + host + "\r\n"
+                    + "Connection: Close\r\n\r\n";
+
+            // Sends off HTTP GET request
+            out.write(request.getBytes());
+            out.flush();
+        } else if (method.equals("POST")) { // HTTP POST
+            // Constructs a HTTP POST request
+            // The end of HTTP POST header should be \r\n\r\n
+            // After HTTP POST header, it's HTTP POST data
+            // POST it's different from GET: the data of POST is added at the end of HTTP request
+            String request = "POST " + path + " HTTP/1.0\r\n" + "Accept: */*\r\n"
+                    + "Host: " + host + "\r\n"
+                    + "Content-Type: application/x-www-form-urlencoded\r\n"
+                    + "Content-Length: " + data.length() + "\r\n\r\n" + data;
+
+            // Send off HTTP POST request
+            out.write(request.getBytes());
+            out.flush();
+        } else {
+            System.out.println("Invalid HTTP method");
+            socket.close();
+            return;
+        }
+
+        // Reads the server's response
+        StringBuffer response = new StringBuffer();
+        byte[] buffer = new byte[4096];
+        int bytes_read;
+
+        // Reads HTTP response
+        while ((bytes_read = in.read(buffer, 0, 4096)) != -1) {
+            // Print server's response
+            for (int i = 0; i < bytes_read; i++) {
+                response.append((char) buffer[i]);
+            }
+        }
+
+        if (response.substring(response.indexOf(" ") + 1,
+                response.indexOf(" ") + 4).equals("200")) {
+            //Save the payload of the HTTP response message
+            File file = new File("index.html");
+            PrintWriter printWriter = new PrintWriter(file);
+            printWriter.println(response.substring(response.indexOf("\r\n\r\n") + 4));
+            printWriter.close();
+        } else {
+            System.out.println("HTTP request failed");
+        }
+
+        // Closes socket
+        socket.close();
+    }
+
     public String sendHttpSReq(String data) throws Exception {
         String outStr, outOStr = "";
 
@@ -321,7 +384,7 @@ public class DnsProxy implements Runnable {
             String inputLine;
             while ((inputLine = in.readLine()) != null) {
                 System.out.println(inputLine);
-                outOStr=outOStr+inputLine;
+                outOStr = outOStr + inputLine;
                 Log.d("TAG", "System.out.println(inputLine); = [" + inputLine + "]");
             }
             in.close();
